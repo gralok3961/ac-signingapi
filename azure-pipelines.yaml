@@ -1,0 +1,55 @@
+variables:
+  title: hashtrion.signing.api
+  nodeVersion: '24.x'
+
+name: $(Build.Repository.Name)_$(Build.DefinitionName)_$(Build.SourceBranchName)_$(Date:yyyyMMdd)$(Rev:.r)
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- checkout: self
+  clean: true
+  path: s/main-repo
+
+- task: NodeTool@0
+  inputs:
+    versionSpec: $(nodeVersion)
+  displayName: 'Install Node.js'
+
+- script: npm ci
+  workingDirectory: $(Pipeline.Workspace)/s/main-repo
+  displayName: 'Install Dependencies'
+
+- script: npm run build
+  workingDirectory: $(Pipeline.Workspace)/s/main-repo
+  displayName: 'Compile Signing API'
+
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: '$(Pipeline.Workspace)/s/main-repo'
+    Contents: |
+      dist/**
+      package.json
+      package-lock.json
+    TargetFolder: '$(Build.ArtifactStagingDirectory)/signing-api'
+  displayName: 'Stage Application'
+
+- script: npm ci --omit=dev
+  workingDirectory: $(Build.ArtifactStagingDirectory)/signing-api
+  displayName: 'Install Runtime Dependencies'
+
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/signing-api'
+    includeRootFolder: false
+    archiveType: 'zip'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/drop.zip'
+    replaceExistingArchive: true
+  displayName: 'Archive Application'
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)/drop.zip'
+    ArtifactName: 'drop'
+    publishLocation: 'Container'
